@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { getChatMessages } from '../api/chat';
 import MessageItem from './MessageItem';
 import MessageForm from './MessageForm';
@@ -11,10 +11,12 @@ const ChatRoom = ({ chatRoom }) => {
   const messagesContainerRef = useRef(null);
 
   // Fetch messages when chat room changes
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async (showLoading = true) => {
     if (!chatRoom) return;
     
-    setLoading(true);
+    if (showLoading) {
+      setLoading(true);
+    }
     setError(null);
     
     try {
@@ -24,15 +26,29 @@ const ChatRoom = ({ chatRoom }) => {
       console.error('Failed to fetch messages:', err);
       setError(err.detail || 'Failed to load messages');
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
-  };
+  }, [chatRoom]);
 
+  // Initial fetch when chat room changes
   useEffect(() => {
     if (chatRoom) {
-      fetchMessages();
+      fetchMessages(true); // Show loading on initial fetch
     }
-  }, [chatRoom?.chat_id]);
+  }, [chatRoom?.chat_id, fetchMessages]);
+
+  // Auto-refresh messages every 3 seconds
+  useEffect(() => {
+    if (!chatRoom) return;
+
+    const intervalId = setInterval(() => {
+      fetchMessages(false); // Don't show loading during polling
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(intervalId);
+  }, [chatRoom?.chat_id, fetchMessages]);
 
   // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
