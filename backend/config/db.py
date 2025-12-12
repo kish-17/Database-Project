@@ -9,7 +9,7 @@ load_dotenv()
 
 DATABASE_URL = os.environ.get("DB_URL")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("anon")
+SUPABASE_KEY = os.environ.get("SUPABASE_ANON_KEY")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

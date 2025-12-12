@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config.db import engine
 import models
+import os
 from routers.auth import auth_router
 from routers.communities import community_router
 from routers.memberships import membership_router
@@ -15,9 +16,15 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+# CORS configuration - allows both localhost and production frontend
+frontend_url = os.environ.get("FRONTEND_URL", "")
+cors_origins = ["http://localhost:5173"]
+if frontend_url:
+    cors_origins.append(frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
