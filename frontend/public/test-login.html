@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Login Test</title>
+</head>
+<body>
+    <h1>Auto-Login Test</h1>
+    <div id="status">Logging in...</div>
+    
+    <script>
+        async function autoLogin() {
+            const statusDiv = document.getElementById('status');
+            
+            try {
+                const response = await fetch('http://localhost:8000/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'lakshman.k@northeastern.edu',
+                        password: 'password123'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.session && data.session.access_token) {
+                    localStorage.setItem('authToken', data.session.access_token);
+                    statusDiv.innerHTML = '✅ Login successful! Redirecting...';
+                    setTimeout(() => {
+                        window.location.href = '/communities';
+                    }, 1000);
+                } else {
+                    statusDiv.innerHTML = '❌ Login failed: No token received';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '❌ Login error: ' + error.message;
+            }
+        }
+        
+        autoLogin();
+    </script>
+</body>
+</html>
