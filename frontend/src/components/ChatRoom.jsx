@@ -39,13 +39,13 @@ const ChatRoom = ({ chatRoom }) => {
     }
   }, [chatRoom?.chat_id, fetchMessages]);
 
-  // Auto-refresh messages every 3 seconds
+  // Auto-refresh messages every 1.5 seconds for faster updates
   useEffect(() => {
     if (!chatRoom) return;
 
     const intervalId = setInterval(() => {
       fetchMessages(false); // Don't show loading during polling
-    }, 3000); // Poll every 3 seconds
+    }, 1500); // Poll every 1.5 seconds for faster updates
 
     return () => clearInterval(intervalId);
   }, [chatRoom?.chat_id, fetchMessages]);
@@ -59,9 +59,14 @@ const ChatRoom = ({ chatRoom }) => {
     scrollToBottom();
   }, [messages]);
 
-  // Handle new message sent
+  // Handle new message sent - refresh immediately to get latest messages
   const handleMessageSent = (newMessage) => {
+    // Optimistically add the message
     setMessages(prev => [...prev, newMessage]);
+    // Immediately fetch latest messages to get any other new messages
+    setTimeout(() => {
+      fetchMessages(false);
+    }, 500); // Small delay to ensure server has processed the message
   };
 
   if (!chatRoom) {
