@@ -1,0 +1,805 @@
+\documentclass[12pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{setspace}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{pdflscape}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{hyperref}
+
+\setstretch{1.3}
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  keepspaces=true
+}
+
+\begin{document}
+
+\begin{flushright}
+Kishan Lakshman\\
+CS5200 -- Database Management and Design\\
+December 12, 2025
+\end{flushright}
+
+\begin{center}
+{\LARGE \textbf{Final Project Report}}\\[4pt]
+{\large Community-Based Messaging Platform}
+\end{center}
+
+\section{Project Overview}
+This project is a full-stack \textbf{community-based messaging platform} where users can create or join communities, publish posts (optionally with media), comment on posts, like posts, and chat in community chat rooms. The project utilizes PostgreSQL (via Supabase) as the main database and a modern React interface to demonstrate core database functionality including CRUD operations, referential integrity, cascade deletion, database triggers, and stored procedures.
+
+\paragraph{What the database tracks:}
+\begin{itemize}
+  \item \textbf{Users}: account info, basic profile, created time, bio, display name
+  \item \textbf{Communities}: name, description, creator, created time
+  \item \textbf{Memberships}: which user is in which community and their role (admin, moderator, member)
+  \item \textbf{Posts}: text content, author, community, media attachments, timestamps
+  \item \textbf{Comments}: comment content, author, post, timestamps
+  \item \textbf{Likes}: which user liked which post and when (with unique constraint)
+  \item \textbf{Chat rooms}: one or more rooms per community
+  \item \textbf{Messages}: sender, chat room, content type (text/media), sent time
+  \item \textbf{Audit Log}: deletion tracking with full JSONB snapshots of deleted data
+\end{itemize}
+
+\paragraph{Key database features implemented:}
+\begin{itemize}
+  \item Comprehensive referential integrity with CASCADE/SET NULL policies
+  \item Database triggers for automatic audit logging on deletions
+  \item Stored procedures for complex queries and statistics
+  \item Secondary indexes for query optimization
+  \item CHECK constraints for data validation
+  \item UNIQUE constraints for preventing duplicate records
+  \item Third Normal Form (3NF) normalization
+\end{itemize}
+
+\section{README: Setup and Installation}
+
+This section provides complete instructions for building and running the project on any computer.
+
+\subsection{Prerequisites}
+\begin{itemize}
+  \item \textbf{Python 3.8+} - Download from \texttt{https://python.org}
+  \item \textbf{Node.js 16+} - Download from \texttt{https://nodejs.org}
+  \item \textbf{PostgreSQL Database} - Using Supabase (free tier)
+  \item \textbf{Git} - For cloning the repository
+\end{itemize}
+
+\subsection{Backend Setup}
+
+\paragraph{Step 1: Clone and Navigate}
+\begin{lstlisting}[language=bash]
+cd backend
+\end{lstlisting}
+
+\paragraph{Step 2: Create Virtual Environment}
+\begin{lstlisting}[language=bash]
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+\end{lstlisting}
+
+\paragraph{Step 3: Install Dependencies}
+\begin{lstlisting}[language=bash]
+pip install -r requirements.txt
+\end{lstlisting}
+
+The \texttt{requirements.txt} contains:
+\begin{itemize}
+  \item \texttt{fastapi} - Modern web framework
+  \item \texttt{uvicorn} - ASGI server
+  \item \texttt{sqlalchemy} - ORM for database operations
+  \item \texttt{psycopg2-binary} - PostgreSQL adapter
+  \item \texttt{python-dotenv} - Environment variable management
+  \item \texttt{supabase} - Supabase client for authentication
+  \item \texttt{python-multipart} - For file uploads
+\end{itemize}
+
+\paragraph{Step 4: Configure Environment Variables}
+Create a \texttt{.env} file in the backend directory:
+\begin{lstlisting}
+DB_URL=postgresql://user:password@host:port/database
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+\end{lstlisting}
+
+\paragraph{Step 5: Run the Backend Server}
+\begin{lstlisting}[language=bash]
+uvicorn main:app --reload --port 8000
+\end{lstlisting}
+
+The server will start at \texttt{http://localhost:8000}. API documentation is available at \texttt{http://localhost:8000/docs}.
+
+\subsection{Frontend Setup}
+
+\paragraph{Step 1: Navigate and Install}
+\begin{lstlisting}[language=bash]
+cd frontend
+npm install
+\end{lstlisting}
+
+Frontend dependencies include:
+\begin{itemize}
+  \item \texttt{react} (v19.2.0) - UI library
+  \item \texttt{vite} - Build tool and dev server
+  \item \texttt{axios} - HTTP client
+  \item \texttt{react-router-dom} - Client-side routing
+  \item \texttt{tailwindcss} - Utility-first CSS framework
+  \item \texttt{lucide-react} - Icon library
+\end{itemize}
+
+\paragraph{Step 2: Configure API URL}
+Update \texttt{src/api/axios.js} if needed:
+\begin{lstlisting}[language=javascript]
+const API_URL = 'http://localhost:8000';
+\end{lstlisting}
+
+\paragraph{Step 3: Run Development Server}
+\begin{lstlisting}[language=bash]
+npm run dev
+\end{lstlisting}
+
+Open browser to \texttt{http://localhost:5173}.
+
+\subsection{Database Setup (Supabase)}
+
+\paragraph{Step 1: Create Supabase Project}
+\begin{enumerate}
+  \item Go to \texttt{https://supabase.com} and create account
+  \item Create new project
+  \item Note your database password
+  \item Go to Settings → Database → Connection String
+  \item Copy the URI connection string (use Session pooler mode)
+  \item Go to Settings → API to get your \texttt{SUPABASE\_URL} and \texttt{SUPABASE\_ANON\_KEY}
+\end{enumerate}
+
+\paragraph{Step 2: Database Initialization}
+Tables are automatically created when the backend starts via SQLAlchemy's \texttt{create\_all()} method. Triggers and stored procedures must be added manually via Supabase SQL Editor (see Section 3 for SQL code).
+
+\subsection{Project Directory Structure}
+\begin{lstlisting}
+Database Project/
+├── backend/
+│   ├── config/
+│   │   └── db.py              # Database configuration
+│   ├── models.py              # SQLAlchemy models
+│   ├── dependencies.py        # Auth dependencies
+│   ├── main.py                # FastAPI app entry
+│   ├── requirements.txt       # Python dependencies
+│   ├── routers/               # API endpoints (8 routers)
+│   ├── services/              # Business logic
+│   └── schemas/               # Pydantic schemas
+├── frontend/
+│   ├── src/
+│   │   ├── api/               # API client functions
+│   │   ├── components/        # Reusable React components
+│   │   ├── pages/             # Page components
+│   │   └── routes/            # Route configuration
+│   ├── package.json
+│   └── vite.config.js
+├── README.md
+└── DEPLOYMENT.md              # Production deployment guide
+\end{lstlisting}
+
+\subsection{Test Credentials}
+\begin{lstlisting}
+Email: lakshman.k@northeastern.edu
+Password: 123456789
+\end{lstlisting}
+
+\section{Technical Specifications}
+
+\subsection{Architecture}
+The application follows a three-tier architecture:
+\begin{itemize}
+  \item \textbf{Presentation Layer}: React SPA with Tailwind CSS
+  \item \textbf{Application Layer}: FastAPI REST API with SQLAlchemy ORM
+  \item \textbf{Data Layer}: PostgreSQL database hosted on Supabase
+\end{itemize}
+
+\subsection{Backend Technologies}
+\begin{itemize}
+  \item \textbf{Framework}: FastAPI - High-performance async Python web framework
+  \item \textbf{ORM}: SQLAlchemy 2.0 - Declarative models with relationship management
+  \item \textbf{Database Driver}: psycopg2-binary - PostgreSQL adapter
+  \item \textbf{Authentication}: Supabase Auth - JWT-based authentication
+  \item \textbf{Validation}: Pydantic - Data validation and serialization
+  \item \textbf{Server}: Uvicorn - Lightning-fast ASGI server
+\end{itemize}
+
+\subsection{Frontend Technologies}
+\begin{itemize}
+  \item \textbf{Framework}: React 18 with hooks
+  \item \textbf{Build Tool}: Vite - Fast HMR and optimized builds
+  \item \textbf{Styling}: Tailwind CSS with custom components
+  \item \textbf{Routing}: React Router v7 - Client-side navigation
+  \item \textbf{HTTP Client}: Axios - Promise-based requests
+  \item \textbf{State Management}: React hooks (useState, useEffect)
+\end{itemize}
+
+\subsection{Database}
+\begin{itemize}
+  \item \textbf{DBMS}: PostgreSQL 15+ via Supabase
+  \item \textbf{Hosting}: Supabase (managed PostgreSQL service)
+  \item \textbf{Access}: Connection pooler for production, direct connection for development
+\end{itemize}
+
+\subsection{API Architecture}
+The backend exposes RESTful API endpoints organized by domain:
+\begin{itemize}
+  \item \texttt{/auth/*} - Authentication (signup, login)
+  \item \texttt{/communities/*} - Community CRUD operations
+  \item \texttt{/posts/*} - Post management
+  \item \texttt{/comments/*} - Comment operations
+  \item \texttt{/likes/*} - Like/unlike functionality
+  \item \texttt{/chat/*} - Chat rooms and messages
+  \item \texttt{/memberships/*} - Community membership management
+  \item \texttt{/users/*} - User profile operations
+\end{itemize}
+
+All endpoints follow REST conventions (GET, POST, PUT, DELETE) and return JSON responses. Authentication is handled via Supabase JWT tokens passed in the Authorization header.
+
+\subsection{Deployment}
+The application is deployed on Render (Platform-as-a-Service):
+\begin{itemize}
+  \item \textbf{Backend}: Web service running on Render with auto-deploy from GitHub
+  \item \textbf{Frontend}: Static site on Render CDN
+  \item \textbf{Database}: Supabase managed PostgreSQL
+\end{itemize}
+
+\section{Database Design}
+
+\subsection{Conceptual Design: Entity-Relationship Diagram}
+
+\begin{landscape}
+\begin{center}
+\includegraphics[width=1.4\textwidth]{erdplus (4).png}
+\end{center}
+\end{landscape}
+
+\noindent\textbf{Entities:}
+\begin{itemize}
+  \item \textbf{User}(\textbf{user\_id}, username, email, password\_hash, created\_at, bio, display\_name)
+  \item \textbf{Community}(\textbf{community\_id}, name, description, created\_by, created\_at)
+  \item \textbf{Membership}(\textbf{membership\_id}, user\_id, community\_id, role, joined\_at)
+  \item \textbf{Post}(\textbf{post\_id}, community\_id, author\_id, content, media\_url, media\_type, created\_at, updated\_at)
+  \item \textbf{Comment}(\textbf{comment\_id}, post\_id, author\_id, content, created\_at)
+  \item \textbf{Like}(\textbf{like\_id}, post\_id, user\_id, created\_at)
+  \item \textbf{ChatRoom}(\textbf{chat\_id}, community\_id, title, created\_at)
+  \item \textbf{Message}(\textbf{msg\_id}, chat\_id, sender\_id, type, content, sent\_at)
+  \item \textbf{AuditLog}(\textbf{audit\_id}, table\_name, record\_id, deleted\_by, deleted\_at, snapshot)
+\end{itemize}
+
+\noindent\textit{Relationships:}
+\begin{itemize}
+  \item Users $\leftrightarrow$ Communities via Membership (many-to-many)
+  \item Community $\rightarrow$ Posts (one-to-many)
+  \item Post $\rightarrow$ Comments (one-to-many)
+  \item Post $\rightarrow$ Likes (one-to-many)
+  \item Community $\rightarrow$ ChatRoom (one-to-many)
+  \item ChatRoom $\rightarrow$ Message (one-to-many)
+\end{itemize}
+
+\subsection{Logical Design: Database Schema}
+
+\paragraph{Table: users}
+\begin{lstlisting}[language=SQL]
+CREATE TABLE users (
+    user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username VARCHAR UNIQUE,
+    email VARCHAR,
+    password_hash VARCHAR,
+    bio TEXT,
+    display_name VARCHAR,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+\end{lstlisting}
+
+\paragraph{Table: communities}
+\begin{lstlisting}[language=SQL]
+CREATE TABLE communities (
+    community_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) UNIQUE NOT NULL,
+    description TEXT,
+    created_by UUID REFERENCES users(user_id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+\end{lstlisting}
+
+\paragraph{Table: memberships}
+\begin{lstlisting}[language=SQL]
+CREATE TABLE memberships (
+    membership_id SERIAL PRIMARY KEY,
+    user_id UUID REFERENCES users(user_id) 
+        ON DELETE CASCADE,
+    community_id INT REFERENCES communities(community_id) 
+        ON DELETE CASCADE,
+    role VARCHAR(50) DEFAULT 'member' 
+        CHECK (role IN ('member', 'moderator', 'admin')),
+    joined_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, community_id)
+);
+\end{lstlisting}
+
+\paragraph{Table: posts}
+\begin{lstlisting}[language=SQL]
+CREATE TABLE posts (
+    post_id SERIAL PRIMARY KEY,
+    community_id INT REFERENCES communities(community_id) 
+        ON DELETE CASCADE,
+    author_id UUID REFERENCES users(user_id) 
+        ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    media_url VARCHAR(500),
+    media_type VARCHAR(50),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+\end{lstlisting}
+
+\paragraph{Table: comments}
+\begin{lstlisting}[language=SQL]
+CREATE TABLE comments (
+    comment_id SERIAL PRIMARY KEY,
+    post_id INT REFERENCES posts(post_id) 
+        ON DELETE CASCADE,
+    author_id UUID REFERENCES users(user_id) 
+        ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+\end{lstlisting}
+
+\paragraph{Table: likes}
+\begin{lstlisting}[language=SQL]
+CREATE TABLE likes (
+    like_id SERIAL PRIMARY KEY,
+    post_id INT REFERENCES posts(post_id) 
+        ON DELETE CASCADE,
+    user_id UUID REFERENCES users(user_id) 
+        ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(post_id, user_id)
+);
+\end{lstlisting}
+
+\paragraph{Table: chat\_rooms}
+\begin{lstlisting}[language=SQL]
+CREATE TABLE chat_rooms (
+    chat_id SERIAL PRIMARY KEY,
+    community_id INT REFERENCES communities(community_id) 
+        ON DELETE CASCADE,
+    title VARCHAR(100) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+\end{lstlisting}
+
+\paragraph{Table: messages}
+\begin{lstlisting}[language=SQL]
+CREATE TABLE messages (
+    msg_id SERIAL PRIMARY KEY,
+    chat_id INT REFERENCES chat_rooms(chat_id) 
+        ON DELETE CASCADE,
+    sender_id UUID REFERENCES users(user_id) 
+        ON DELETE SET NULL,
+    type VARCHAR(50) CHECK (type IN ('text', 'image', 'file')),
+    content TEXT NOT NULL,
+    sent_at TIMESTAMPTZ DEFAULT NOW()
+);
+\end{lstlisting}
+
+\paragraph{Table: audit\_log}
+\begin{lstlisting}[language=SQL]
+CREATE TABLE audit_log (
+    audit_id SERIAL PRIMARY KEY,
+    table_name VARCHAR(50) NOT NULL,
+    record_id INT NOT NULL,
+    deleted_by UUID REFERENCES users(user_id) 
+        ON DELETE SET NULL,
+    deleted_at TIMESTAMPTZ DEFAULT NOW(),
+    snapshot JSONB NOT NULL
+);
+
+CREATE INDEX idx_audit_log_table_name ON audit_log(table_name);
+CREATE INDEX idx_audit_log_deleted_by ON audit_log(deleted_by);
+CREATE INDEX idx_audit_log_deleted_at ON audit_log(deleted_at);
+\end{lstlisting}
+
+\subsection{Database Constraints}
+
+\paragraph{Primary Keys:} All tables have surrogate primary keys (UUID for users, SERIAL for others).
+
+\paragraph{Foreign Keys:} All relationships enforced with foreign key constraints.
+
+\paragraph{ON DELETE Policies:}
+\begin{itemize}
+  \item CASCADE: Used for owned relationships (posts → comments, communities → posts)
+  \item SET NULL: Used where historical data should be preserved (messages.sender\_id, audit\_log.deleted\_by)
+\end{itemize}
+
+\paragraph{UNIQUE Constraints:}
+\begin{itemize}
+  \item \texttt{users.username} - No duplicate usernames
+  \item \texttt{communities.name} - No duplicate community names
+  \item \texttt{(post\_id, user\_id)} in likes - User can like a post only once
+  \item \texttt{(user\_id, community\_id)} in memberships - User joins community once
+\end{itemize}
+
+\paragraph{CHECK Constraints:}
+\begin{itemize}
+  \item \texttt{memberships.role IN ('member', 'moderator', 'admin')}
+  \item \texttt{messages.type IN ('text', 'image', 'file')}
+\end{itemize}
+
+\subsection{Database Triggers}
+
+\paragraph{Post Deletion Audit Trigger:}
+\begin{lstlisting}[language=SQL]
+CREATE OR REPLACE FUNCTION log_post_deletion()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO audit_log (table_name, record_id, deleted_by, snapshot)
+    VALUES ('posts', OLD.post_id, OLD.author_id, 
+            row_to_json(OLD)::jsonb);
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER posts_delete_audit_trigger
+BEFORE DELETE ON posts
+FOR EACH ROW EXECUTE FUNCTION log_post_deletion();
+\end{lstlisting}
+
+\paragraph{Comment Deletion Audit Trigger:}
+\begin{lstlisting}[language=SQL]
+CREATE OR REPLACE FUNCTION log_comment_deletion()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO audit_log (table_name, record_id, deleted_by, snapshot)
+    VALUES ('comments', OLD.comment_id, OLD.author_id, 
+            row_to_json(OLD)::jsonb);
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER comments_delete_audit_trigger
+BEFORE DELETE ON comments
+FOR EACH ROW EXECUTE FUNCTION log_comment_deletion();
+\end{lstlisting}
+
+\subsection{Stored Procedures}
+
+\paragraph{Get Audit Logs:}
+\begin{lstlisting}[language=SQL]
+CREATE OR REPLACE FUNCTION get_audit_logs(
+    filter_table VARCHAR DEFAULT NULL,
+    filter_user UUID DEFAULT NULL,
+    start_date TIMESTAMPTZ DEFAULT NULL,
+    end_date TIMESTAMPTZ DEFAULT NULL
+)
+RETURNS TABLE (
+    audit_id INT,
+    table_name VARCHAR,
+    record_id INT,
+    deleted_by UUID,
+    deleted_at TIMESTAMPTZ,
+    snapshot JSONB
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT * FROM audit_log
+    WHERE (filter_table IS NULL OR audit_log.table_name = filter_table)
+      AND (filter_user IS NULL OR audit_log.deleted_by = filter_user)
+      AND (start_date IS NULL OR audit_log.deleted_at >= start_date)
+      AND (end_date IS NULL OR audit_log.deleted_at <= end_date)
+    ORDER BY deleted_at DESC;
+END;
+$$ LANGUAGE plpgsql;
+\end{lstlisting}
+
+\paragraph{Get User Deletion Statistics:}
+\begin{lstlisting}[language=SQL]
+CREATE OR REPLACE FUNCTION get_user_deletion_stats(user_uuid UUID)
+RETURNS TABLE (
+    table_name VARCHAR,
+    deletion_count BIGINT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT audit_log.table_name, COUNT(*)::BIGINT
+    FROM audit_log
+    WHERE deleted_by = user_uuid
+    GROUP BY audit_log.table_name;
+END;
+$$ LANGUAGE plpgsql;
+\end{lstlisting}
+
+\subsection{Normalization}
+The database is in \textbf{Third Normal Form (3NF)}:
+\begin{itemize}
+  \item All tables have atomic values (1NF)
+  \item All non-key attributes are fully functionally dependent on the primary key (2NF)
+  \item No transitive dependencies exist (3NF)
+\end{itemize}
+
+\section{User Flow}
+
+\subsection{Authentication Flow}
+\begin{enumerate}
+  \item User visits the application
+  \item If not authenticated, redirected to Login page
+  \item User can choose to \textbf{Sign Up} (new account) or \textbf{Login} (existing account)
+  \item \textbf{Sign Up}: Enter username, email, password → Account created via Supabase Auth → Auto-login
+  \item \textbf{Login}: Enter email, password → Supabase validates credentials → JWT token issued
+  \item Token stored in localStorage and included in all API requests
+\end{enumerate}
+
+\subsection{Community Interaction Flow}
+\begin{enumerate}
+  \item \textbf{Browse Communities}: User views list of all communities with member counts
+  \item \textbf{Join Community}: Click "Join" button → Membership record created with role='member'
+  \item \textbf{View Community}: Click community name → Navigate to community detail page
+  \item \textbf{Create Community}: Click "Create Community" → Modal form → Enter name and description → New community created with user as creator
+\end{enumerate}
+
+\subsection{Post Interaction Flow}
+\begin{enumerate}
+  \item \textbf{View Posts}: In community detail page, see feed of recent posts
+  \item \textbf{Create Post}: Click "Create Post" → Modal form → Enter content, optionally attach media → Post created
+  \item \textbf{Edit Post}: On own post, click "Edit" → Modify content → Save updates (updated\_at timestamp changed)
+  \item \textbf{Delete Post}: On own post, click "Delete" → Confirmation → Post deleted (triggers audit log)
+  \item \textbf{View Post Details}: Click on post → See full content, comments, and likes
+\end{enumerate}
+
+\subsection{Comment and Like Flow}
+\begin{enumerate}
+  \item \textbf{Like Post}: Click heart icon → Toggle like (create or delete like record) → Count updates in real-time
+  \item \textbf{Add Comment}: In post detail, enter comment text → Submit → Comment appears immediately
+  \item \textbf{Delete Comment}: On own comment, click delete → Comment removed (triggers audit log)
+\end{enumerate}
+
+\subsection{Chat Flow}
+\begin{enumerate}
+  \item \textbf{Open Chat}: In community detail, click "Chat" tab → Load chat rooms for community
+  \item \textbf{Select Room}: Click on chat room → Load recent messages
+  \item \textbf{Send Message}: Type message → Press Enter or click Send → Message saved to database and displayed
+  \item \textbf{View Messages}: Messages displayed in chronological order with sender info and timestamps
+\end{enumerate}
+
+\subsection{Profile Management Flow}
+\begin{enumerate}
+  \item \textbf{View Profile}: Click profile icon → Navigate to profile page → See display name, email, bio
+  \item \textbf{Edit Profile}: Click "Edit Profile" → Modify display name or bio → Save → Database updated
+\end{enumerate}
+
+\subsection{Member Management Flow (Admin/Moderator)}
+\begin{enumerate}
+  \item \textbf{View Members}: In community detail, click "Members" tab → See list of all members with roles
+  \item \textbf{Change Role}: Select user → Change role dropdown → Update → Membership record updated
+  \item \textbf{Remove Member}: Click remove icon → Member's membership record deleted
+\end{enumerate}
+
+\subsection{Common Database Operations by User Action}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{4cm}p{10cm}}
+\toprule
+\textbf{User Action} & \textbf{Database Operations} \\
+\midrule
+Sign Up & INSERT into users table via Supabase Auth \\
+Create Community & INSERT into communities; INSERT into memberships (creator as admin) \\
+Join Community & INSERT into memberships with role='member' \\
+Create Post & INSERT into posts with author\_id and community\_id \\
+Like Post & INSERT into likes (or DELETE if already liked) \\
+Add Comment & INSERT into comments with post\_id and author\_id \\
+Send Message & INSERT into messages with chat\_id and sender\_id \\
+Delete Post & DELETE from posts (CASCADE deletes comments/likes; trigger logs to audit\_log) \\
+Edit Profile & UPDATE users SET display\_name, bio \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Lessons Learned}
+
+\subsection{Technical Expertise Gained}
+
+\paragraph{Database Design and Normalization}
+Through this project, I gained hands-on experience in designing a normalized relational database. I learned how to identify entities, define relationships, and apply Third Normal Form (3NF) principles to eliminate redundancy and maintain data integrity. The process of translating a conceptual ERD into a logical schema with proper constraints reinforced my understanding of referential integrity.
+
+\paragraph{PostgreSQL Advanced Features}
+I learned to implement and use:
+\begin{itemize}
+  \item \textbf{Triggers}: Automatically logging deletions to an audit trail without application-level code
+  \item \textbf{Stored Procedures}: Creating reusable functions for complex queries and statistics
+  \item \textbf{JSONB Data Type}: Storing complete snapshots of deleted records for audit purposes
+  \item \textbf{Indexes}: Optimizing query performance with strategic secondary indexes
+  \item \textbf{Cascade Policies}: Understanding when to use CASCADE vs SET NULL for foreign key deletion
+\end{itemize}
+
+\paragraph{ORM Usage (SQLAlchemy)}
+Working with SQLAlchemy taught me the difference between raw SQL and ORM-based database interaction. I learned:
+\begin{itemize}
+  \item Declarative model definition with relationships
+  \item Session management and transaction handling
+  \item Query optimization with eager loading (joinedload, selectinload)
+  \item How ORMs translate Python code to SQL
+\end{itemize}
+
+\paragraph{Full-Stack Integration}
+This project gave me end-to-end experience connecting a React frontend with a FastAPI backend and PostgreSQL database:
+\begin{itemize}
+  \item RESTful API design and implementation
+  \item JWT-based authentication flow
+  \item Async/await patterns in both frontend (JavaScript) and backend (Python)
+  \item CORS configuration for cross-origin requests
+  \item Environment variable management across tiers
+\end{itemize}
+
+\paragraph{Deployment and DevOps}
+I gained practical experience with:
+\begin{itemize}
+  \item Platform-as-a-Service deployment (Render)
+  \item Database-as-a-Service hosting (Supabase)
+  \item Environment-specific configuration management
+  \item Continuous deployment from GitHub
+\end{itemize}
+
+\subsection{Insights Gained}
+
+\paragraph{Time Management}
+The project took significantly longer than initially estimated. I learned that:
+\begin{itemize}
+  \item Database schema changes late in development are costly (required updating models, migrations, frontend code)
+  \item Building a feature-complete UI takes more time than backend API development
+  \item Authentication integration is complex and should be tackled early
+  \item Testing and debugging database triggers requires careful isolation of test cases
+\end{itemize}
+
+\paragraph{Data Domain Insights}
+Working in the social media domain taught me:
+\begin{itemize}
+  \item The importance of soft deletes for content moderation (hence the audit log)
+  \item Many-to-many relationships (users-communities) require careful handling of role attributes
+  \item Cascade deletion must be used cautiously—deleting a community should remove posts, but deleting a user might need more nuanced handling
+  \item Timestamp tracking (created\_at, updated\_at) is essential for any content platform
+  \item Unique constraints prevent duplicate likes/memberships but require special handling in the UI
+\end{itemize}
+
+\paragraph{Architecture Insights}
+\begin{itemize}
+  \item Separating business logic into service layers keeps routers clean and testable
+  \item Schema validation (Pydantic) prevents invalid data from reaching the database
+  \item Optimistic UI updates improve user experience but require careful error handling
+  \item Database indexes are crucial for queries that filter by foreign keys (e.g., "get posts for community")
+\end{itemize}
+
+\subsection{Alternative Design Approaches Considered}
+
+\paragraph{NoSQL Database}
+Initially, I considered using MongoDB for more flexible schema evolution. However, I chose PostgreSQL because:
+\begin{itemize}
+  \item The data has clear relational structure (users, communities, posts)
+  \item Referential integrity is critical for this domain
+  \item Supabase provides excellent PostgreSQL hosting
+  \item SQL is better for complex queries (e.g., "get all posts from communities a user is member of")
+\end{itemize}
+
+\paragraph{Real-Time Chat Implementation}
+The current chat implementation uses simple polling. Alternative approaches:
+\begin{itemize}
+  \item \textbf{WebSockets}: Would enable true real-time messaging without polling. Considered but not implemented due to time constraints and deployment complexity on Render.
+  \item \textbf{Supabase Realtime}: Supabase offers real-time subscriptions to database changes. This would be the ideal solution and is a top priority for future work.
+\end{itemize}
+
+\paragraph{Media Storage}
+Currently, the schema has \texttt{media\_url} fields, but media handling is minimal. Alternatives considered:
+\begin{itemize}
+  \item \textbf{Supabase Storage}: Built-in file storage with CDN delivery
+  \item \textbf{AWS S3}: Industry standard for media storage
+  \item \textbf{Cloudinary}: Specialized for images with transformations
+\end{itemize}
+For this academic project, I kept it simple with URL references, but production systems would need proper media handling.
+
+\paragraph{Authentication Approach}
+I used Supabase Auth, which handles user creation in a separate auth.users table. An alternative would be:
+\begin{itemize}
+  \item Custom JWT authentication with bcrypt password hashing
+  \item OAuth integration (Google, GitHub login)
+\end{itemize}
+Supabase Auth was chosen for simplicity and security, though it added complexity in syncing auth.users with my application's users table.
+
+\subsection{Code Not Working / Known Issues}
+
+\paragraph{Media Upload}
+While the database schema supports media attachments (\texttt{media\_url}, \texttt{media\_type}), the actual file upload functionality is not fully implemented in the frontend. The backend has the fields and the frontend has input components, but S3/Supabase Storage integration is incomplete. Users can enter media URLs manually, but not upload files directly.
+
+\paragraph{Real-Time Chat}
+Chat messages require manual refresh or polling. There is no WebSocket or Supabase Realtime integration, so new messages don't appear automatically.
+
+\paragraph{Pagination}
+All list endpoints (posts, comments, members) return all records without pagination. For large datasets, this would cause performance issues. Pagination should be implemented using LIMIT/OFFSET or cursor-based pagination.
+
+\paragraph{Role-Based Access Control (RBAC)}
+While roles (admin, moderator, member) are stored in the database, the backend doesn't fully enforce role-based permissions. For example, moderators should be able to delete any post in their community, but currently only post authors can delete their own posts.
+
+\paragraph{Notification System}
+There's no notification system for likes, comments, or mentions. This would require a new notifications table and backend logic.
+
+\subsection{Future Work}
+
+\paragraph{Planned Database Uses}
+\begin{itemize}
+  \item \textbf{Analytics}: Add tables for tracking user activity (views, clicks) to build engagement analytics
+  \item \textbf{Moderation}: Expand audit\_log to track all moderation actions (warnings, bans, edited content)
+  \item \textbf{Recommendation Engine}: Use post like/comment patterns to recommend communities to users
+  \item \textbf{Search}: Implement full-text search on posts and comments using PostgreSQL's \texttt{tsvector} and GIN indexes
+\end{itemize}
+
+\paragraph{Added Functionality}
+\begin{itemize}
+  \item \textbf{Real-Time Features}: Integrate Supabase Realtime for live chat and notifications
+  \item \textbf{Media Handling}: Complete file upload with Supabase Storage integration
+  \item \textbf{Notifications}: Add notification system for mentions, replies, and community updates
+  \item \textbf{Direct Messaging}: Add private 1-on-1 chat between users
+  \item \textbf{Post Reactions}: Expand beyond binary likes to emoji reactions
+  \item \textbf{Threaded Comments}: Add support for nested comment replies
+  \item \textbf{Community Discovery}: Add tags/categories to communities for better discoverability
+  \item \textbf{Moderation Tools}: Add reporting system, content flagging, and moderator dashboard
+  \item \textbf{User Reputation}: Track user karma/reputation based on post upvotes
+  \item \textbf{Rich Text Editor}: Support markdown or rich text formatting in posts/comments
+\end{itemize}
+
+\paragraph{Performance Optimizations}
+\begin{itemize}
+  \item Implement Redis caching for frequently accessed data (community lists, popular posts)
+  \item Add database connection pooling for better concurrent user handling
+  \item Implement lazy loading and virtual scrolling for long feeds
+  \item Add CDN for static assets
+\end{itemize}
+
+\paragraph{Scalability Considerations}
+As the user base grows, the following would be necessary:
+\begin{itemize}
+  \item Migrate from Supabase free tier to dedicated database with read replicas
+  \item Implement database sharding for horizontal scaling
+  \item Add message queue (RabbitMQ, Redis Streams) for asynchronous processing
+  \item Separate media storage to S3 or similar
+  \item Add rate limiting to prevent abuse
+\end{itemize}
+
+\paragraph{Integration with Startup}
+As mentioned in the original proposal, this project serves as a foundation for building a community feature in the startup I'm working with. Specific adaptations planned:
+\begin{itemize}
+  \item Integrate with existing user authentication system
+  \item Add company-specific features (employee verification, department communities)
+  \item Implement single sign-on (SSO) for enterprise customers
+  \item Add analytics dashboard for community managers
+\end{itemize}
+
+\section{Conclusion}
+
+This project successfully demonstrates the design and implementation of a normalized relational database for a community-based messaging platform. Key achievements include:
+
+\begin{itemize}
+  \item Comprehensive database design with 9 normalized tables
+  \item Implementation of advanced PostgreSQL features (triggers, stored procedures, indexes)
+  \item Full-stack integration with React frontend and FastAPI backend
+  \item Successful deployment to production environment
+  \item Hands-on experience with real-world database challenges
+\end{itemize}
+
+The project provided invaluable learning in database design, ORM usage, full-stack development, and deployment. While there are areas for improvement (real-time features, media handling, RBAC), the core functionality demonstrates a solid understanding of database management principles and their application in building scalable web applications.
+
+This serves as a strong foundation for future work in community platforms and validates the database architecture for production use with additional refinements.
+
+\end{document}

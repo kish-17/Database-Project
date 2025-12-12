@@ -36,3 +36,4 @@ def update_my_profile(
     except Exception as e:
         logger.error(f"Update profile failed for user {user.id}: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+

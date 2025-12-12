@@ -29,3 +29,4 @@ class UserService:
         
         logger.info(f"User {user_id} updated profile")
         return user
+

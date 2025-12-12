@@ -178,3 +178,4 @@ const EditCommunityModal = ({ community, isOpen, onClose, onSuccess }) => {
 
 export default EditCommunityModal;
 
+

@@ -9,3 +9,4 @@ export const updateMyProfile = async (data) => {
   const response = await api.put('/users/profile', data);
   return response.data;
 };
+
